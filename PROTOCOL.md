@@ -8,16 +8,20 @@ komenda;parametr1;parametr2;[...];parametrN;\n
 Wysyła zapytanie o listę dostępnych lobby
 
 odpowiedź:
+
 list_r;nazwa_lobby_1;limit_czasu_1;nazwa_lobby_2;limit_czasu_2;[...];nazwa_lobby_N;limit_czasu_N;
 
 ## clob;nazwa_lobby;limit_czasu_sec;
 Wysyła zapytanie tworzące nową grę o podanych ustawieniach
 
 odpowiedź:
+
 clob_r;status;
 
 status:
+
 0 = OK
+
 1 = FAIL
 
 ## join;nazwa_lobby;
@@ -27,7 +31,9 @@ join_r;status;
 
 status:
 0 = OK
+
 1 = LOBBY NOT FOUND
+
 2 = LOBBY FULL
 
 ## move;pos1;pos2;
@@ -59,6 +65,9 @@ Inforuje o ruchu wykonanym przez przeciwnika
 Koniec gry + informacja o jej przebiegu
 
 status:
+
 0 = WON
+
 1 = LOST
+
 2 = ENEMY TIMEOUT
