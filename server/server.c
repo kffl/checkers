@@ -32,14 +32,21 @@ void initializeGame(game *new_game, int player1_sd) {
     new_game->move_count = 0;
     new_game->last_attack = 60;
     new_game->player_move = 0;
+    new_game->is_terminated = 0;
     new_game->mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
     for (int i = 0; i < 32; i++) {
         if (i < 12) {
             new_game->board[i] = 1; //pionki gracza 1 w górnej części
+            new_game->board_history_p1[i] = 1;
+            new_game->board_history_p2[i] = 0;
         } else if (i >= 20) {
             new_game->board[i] = 2; //gracza 2 w dolnej
+            new_game->board_history_p1[i] = 0;
+            new_game->board_history_p2[i] = 1;
         } else {
             new_game->board[i] = 0; //pozostałe pola puste
+            new_game->board_history_p1[i] = 0;
+            new_game->board_history_p2[i] = 0;
         }
     }    
 }
@@ -61,16 +68,21 @@ void gameManager(void *t_data) {
     int v;
     char buf[1024];
     int player_socket = 0;
+    int other_player_socket = 0;
     if ((*th_data).player == 1) {
         player_socket = current_game->player1_socket;
+        other_player_socket = current_game->player2_socket;
     } else {
         player_socket = current_game->player2_socket;
+        other_player_socket = current_game->player1_socket;
     }
 
     while(1) {
         v = read(player_socket, buf, 1024);
+        int i;
         if (v>0) {
-            send(player_socket, buf, strlen(buf), 0);
+            i = serializeGame(current_game, buf);
+            send(other_player_socket, buf, i, 0);
         }
     }
 
@@ -96,6 +108,7 @@ void connectionListener(int server_socket_descriptor) {
         printf("Połączenie...\n");
 
         if (awaiting_game == -1) { //żadna gra nie oczekuje, trzeba otworzyć nową
+            printf("Tworzenie nowej poczekalni...\n");
             awaiting_game = findAvailiableGame();
             if (awaiting_game == -1) { //wszystkie zajęte
                 close(connection_socket_descriptor); //serwer zapełniony, orzuca połączenie
@@ -108,6 +121,7 @@ void connectionListener(int server_socket_descriptor) {
                 send(awaiting_player_socket_descriptor, buf, strlen(buf), 0);
             }
         } else { //jakaś gra oczekuje
+            printf("Poczekalnia pełna, tworzenie gry...\n");
             game *aw_game = games[awaiting_game];
             aw_game -> player2_socket = connection_socket_descriptor;
             awaiting_game = -1;
@@ -120,6 +134,9 @@ void connectionListener(int server_socket_descriptor) {
             data_p2 -> player = 2;
             pthread_t thread1;
             pthread_t thread2;
+            char buf[128] = "start;\n";
+            send(awaiting_player_socket_descriptor, buf, strlen(buf), 0);
+            send(connection_socket_descriptor, buf, strlen(buf), 0);
             create_result1 = pthread_create(&thread1, NULL, gameManager, (void *)data_p1);
             if (create_result1){
                 printf("Błąd przy próbie utworzenia wątku, kod błędu: %d\n", create_result1);
