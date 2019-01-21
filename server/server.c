@@ -13,6 +13,7 @@
 #include <pthread.h>
 
 #include "gameLogic.c"
+#include "parser.c"
 
 #define MAX_GAMES 1024
 #define QUEUE_SIZE 10
@@ -60,16 +61,34 @@ int findAvailiableGame() { //znajduje wolny slot na grę w games
     return -1; //nie znaleziono
 }
 
+char sendToClient(int socket, char *buf, int n) { //wysyła do klienta
+    int i = 0;
+    int s;
+    while (n > 0) { //zabezpiecza przed pofragmentowaną wysyłką
+        s = send(socket, buf+i, n, 0);
+        if (s < 0) {
+            return 0;
+        }
+        i += s;
+        n -= s;
+    }
+    return 1;
+}
+
+void playerQuit(game *g, char player) {
+    
+}
+
 void gameManager(void *t_data) {
     pthread_detach(pthread_self());
     game_manager_data *th_data = (game_manager_data*)t_data;
     game *current_game = (*th_data).current_game;
-
+    char player = (*th_data).player;
     int v;
     char buf[1024];
     int player_socket = 0;
     int other_player_socket = 0;
-    if ((*th_data).player == 1) {
+    if (player == 1) {
         player_socket = current_game->player1_socket;
         other_player_socket = current_game->player2_socket;
     } else {
@@ -78,12 +97,29 @@ void gameManager(void *t_data) {
     }
 
     while(1) {
-        v = read(player_socket, buf, 1024);
         int i;
+        v = read(player_socket, buf, 1024);
+        pthread_mutex_lock(current_game->mutex); //mutex gry założony
+        //na czas przetwarzania odebranego zapytania
         if (v>0) {
-            i = serializeGame(current_game, buf);
-            send(other_player_socket, buf, i, 0);
+            char cmd;
+            cmd = parseCommandName(buf);
+            if (cmd == 1) {
+                char pos1, pos2;
+                parseMove(buf, &pos1, &pos2);
+                printf("Move %d, %d, player %d\n", pos1, pos2, player);
+                i = serializeGame(current_game, buf);
+                sendToClient(other_player_socket, buf, i);
+                sendToClient(player_socket, buf, i);
+            } else if (cmd == 2) {
+                playerQuit(current_game, player);
+                printf("Player %d quit game\n", player);
+                
+            }
+        } else if (v == 0) { //klient się rozłączył
+
         }
+        pthread_mutex_unlock(current_game->mutex);
     }
 
 
