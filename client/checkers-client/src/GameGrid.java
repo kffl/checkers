@@ -193,7 +193,6 @@ public class GameGrid extends JFrame {
 		if (isMovePossible(x, y, xn, yn)) {
 			highlightedButtons.add(buttons[XYtoFieldNum(xn, yn)]);
 			buttons[XYtoFieldNum(xn, yn)].setHighlighted(true);
-			System.out.println("Highlighting button: " + String.valueOf(XYtoFieldNum(xn, yn)));
 		}
 		
 		xn = x - 1;
@@ -201,7 +200,6 @@ public class GameGrid extends JFrame {
 		if (isMovePossible(x, y, xn, yn)) {
 			highlightedButtons.add(buttons[XYtoFieldNum(xn, yn)]);
 			buttons[XYtoFieldNum(xn, yn)].setHighlighted(true);
-			System.out.println("Highlighting button: " + String.valueOf(XYtoFieldNum(xn, yn)));
 		}
 		
 		xn = x - 1;
@@ -209,7 +207,6 @@ public class GameGrid extends JFrame {
 		if (isMovePossible(x, y, xn, yn)) {
 			highlightedButtons.add(buttons[XYtoFieldNum(xn, yn)]);
 			buttons[XYtoFieldNum(xn, yn)].setHighlighted(true);
-			System.out.println("Highlighting button: " + String.valueOf(XYtoFieldNum(xn, yn)));
 		}
 		
 		
@@ -229,7 +226,6 @@ public class GameGrid extends JFrame {
 		if (isMovePossible(x, y, xn, yn)) {
 			highlightedButtons.add(buttons[XYtoFieldNum(xn, yn)]);
 			buttons[XYtoFieldNum(xn, yn)].setHighlighted(true);
-			System.out.println("Highlighting button: " + String.valueOf(XYtoFieldNum(xn, yn)));
 		}
 		
 		xn = x - 2;
@@ -237,7 +233,6 @@ public class GameGrid extends JFrame {
 		if (isMovePossible(x, y, xn, yn)) {
 			highlightedButtons.add(buttons[XYtoFieldNum(xn, yn)]);
 			buttons[XYtoFieldNum(xn, yn)].setHighlighted(true);
-			System.out.println("Highlighting button: " + String.valueOf(XYtoFieldNum(xn, yn)));
 		}
 		
 		xn = x - 2;
@@ -245,7 +240,6 @@ public class GameGrid extends JFrame {
 		if (isMovePossible(x, y, xn, yn)) {
 			highlightedButtons.add(buttons[XYtoFieldNum(xn, yn)]);
 			buttons[XYtoFieldNum(xn, yn)].setHighlighted(true);
-			System.out.println("Highlighting button: " + String.valueOf(XYtoFieldNum(xn, yn)));
 		}
 		
 		
@@ -254,7 +248,6 @@ public class GameGrid extends JFrame {
 		if (isMovePossible(x, y, xn, yn)) {
 			highlightedButtons.add(buttons[XYtoFieldNum(xn, yn)]);
 			buttons[XYtoFieldNum(xn, yn)].setHighlighted(true);
-			System.out.println("Highlighting button: " + String.valueOf(XYtoFieldNum(xn, yn)));
 		}
 		
 	}
