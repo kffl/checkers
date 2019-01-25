@@ -15,7 +15,7 @@
 #include "gameLogic.c"
 #include "parser.c"
 
-#define MAX_GAMES 1024
+#define MAX_GAMES 1024 //rozmiar tablicy games - maksymalna liczba jednocześnie rozgrywających się gier
 #define QUEUE_SIZE 10
 
 //tablica rozgrywanych gier
@@ -26,7 +26,7 @@ pthread_mutex_t *games_mutex;
 //struktura przekazywana do wątku gameManager (oraz do gameTimer)
 typedef struct
 {
-    game* current_game;
+    game* current_game; //wskaźnik na grę, której dotyczy wątek
     int player; //którego gracza nasłuchuje gameManager, w przypadku gameTimer - 0
 } game_manager_data;
 
@@ -115,6 +115,7 @@ void *gameManager(void *t_data) {
     printf("Uruchomiono gameManager gry %d, gracza %d.\n", current_game->game_id, (*th_data).player);
     int v;
     char buf[1024];
+    int l = 0;
     int player_socket = 0;
     int other_player_socket = 0;
     if (player == 1) {
@@ -133,7 +134,7 @@ void *gameManager(void *t_data) {
     pthread_mutex_unlock(current_game->mutex);
 
     while(1) {
-        v = recv(player_socket, buf, 1024, 0);
+        v = recv(player_socket, buf + l, 1, 0);
         pthread_mutex_lock(current_game->mutex);
         //mutex gry założony
         //na czas przetwarzania odebranego zapytania
@@ -163,42 +164,49 @@ void *gameManager(void *t_data) {
             }
 
         } 
-        
-        if (v>0) {
-            //jeżeli odebrano wiadomość od klienta
-            char cmd;
-            cmd = parseCommandName(buf);
-            if (cmd == 1) { //komenda move
-                int pos1, pos2;
-                parseMove(buf, &pos1, &pos2);
 
-                if (makeMove(current_game, (*th_data).player, pos1, pos2) > 0) {
-                    //wykonano ruch
-                    printf("Gra %d : gracz %d wykonał poprawny ruch: %d, %d\n", game_id, (*th_data).player, pos1, pos2);
-                    if (current_game->player_move > 2) { //jeśli gra się zakończyła
-                        printf("Gra %d : koniec gry \n", game_id);
-                        killGame(current_game, current_game->player_move);   
-                        current_game->dead_threads_count++;   
-                        printf("GameManager gry %d kończy pracę jako pierwszy.\n", current_game->game_id);
-                        pthread_mutex_unlock(current_game->mutex);
-                        pthread_exit(NULL);
-                    }
-                    i = serializeGame(current_game, buf);
-                    sendToClient(other_player_socket, buf, i);
-                    sendToClient(player_socket, buf, i);
-                    
-                } else {
-                    //nie wykonano ruchu
-                    printf("Gra %d : gracz %d wykonał niepoprawny ruch: %d, %d, ignorujemy\n", game_id, (*th_data).player, pos1, pos2);
-                }                
-            } else if (cmd == 2) {
-                //komenda quit
-                printf("Gra %d : gracz %d opuścił grę\n", game_id, (*th_data).player);
-                killGame(current_game, ((*th_data).player)+5);   
-                current_game->dead_threads_count++;   
-                printf("GameManager gry %d kończy pracę jako pierwszy.\n", current_game->game_id);
-                pthread_mutex_unlock(current_game->mutex);
-                pthread_exit(NULL);
+        if (v > 0) {
+            if (buf[l] == '\n') {
+                //odczytano całą komednę
+                //jeżeli odebrano wiadomość od klienta
+                char cmd;
+                cmd = parseCommandName(buf);
+                if (cmd == 1) { //komenda move
+                    int pos1, pos2;
+                    parseMove(buf, &pos1, &pos2);
+
+                    if (makeMove(current_game, (*th_data).player, pos1, pos2) > 0) {
+                        //wykonano ruch
+                        printf("Gra %d : gracz %d wykonał poprawny ruch: %d, %d\n", game_id, (*th_data).player, pos1, pos2);
+                        if (current_game->player_move > 2) { //jeśli gra się zakończyła
+                            printf("Gra %d : koniec gry \n", game_id);
+                            killGame(current_game, current_game->player_move);   
+                            current_game->dead_threads_count++;   
+                            printf("GameManager gry %d kończy pracę jako pierwszy.\n", current_game->game_id);
+                            pthread_mutex_unlock(current_game->mutex);
+                            pthread_exit(NULL);
+                        }
+                        i = serializeGame(current_game, buf);
+                        sendToClient(other_player_socket, buf, i);
+                        sendToClient(player_socket, buf, i);
+                        
+                    } else {
+                        //nie wykonano ruchu
+                        printf("Gra %d : gracz %d wykonał niepoprawny ruch: %d, %d, ignorujemy\n", game_id, (*th_data).player, pos1, pos2);
+                    }                
+                } else if (cmd == 2) {
+                    //komenda quit
+                    printf("Gra %d : gracz %d opuścił grę\n", game_id, (*th_data).player);
+                    killGame(current_game, ((*th_data).player)+5);   
+                    current_game->dead_threads_count++;   
+                    printf("GameManager gry %d kończy pracę jako pierwszy.\n", current_game->game_id);
+                    pthread_mutex_unlock(current_game->mutex);
+                    pthread_exit(NULL);
+                }
+                l = 0;
+            } else {
+                //to jeszcze nie cała komenda
+                l += v;
             }
         } else {
             //klient się rozłączył
