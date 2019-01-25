@@ -215,7 +215,6 @@ public class GameGrid extends JFrame {
 		if (isMovePossible(x, y, xn, yn)) {
 			highlightedButtons.add(buttons[XYtoFieldNum(xn, yn)]);
 			buttons[XYtoFieldNum(xn, yn)].setHighlighted(true);
-			System.out.println("Highlighting button: " + String.valueOf(XYtoFieldNum(xn, yn)));
 		}
 		
 		

@@ -4,20 +4,20 @@
 #include <stdio.h>
 #include <time.h>
 
-#define ROUND_TIME 10 //max długość tury
+#define ROUND_TIME 60 //max długość tury
 
 typedef struct //struktura reprezentująca grę
 {
     int player1_socket;
     int player2_socket;
     int move_count; //licznik ruchów
-    char player_move; //który gracz obecnie wykonuje ruch
-    char board[32]; //plansza
+    int player_move; //który gracz obecnie wykonuje ruch
+    int board[32]; //plansza
     int board_history_p1[32];
     int board_history_p2[32];
-    char last_attack; //czy ostatnio wykonano bicie (jeśli tak to gdzie się ono zakończyło)
-    char is_terminated; //flaga informujaca o zakonczeniu gry
-    char dead_threads_count; //są 3 wątki na grę, ile z nich już zakończyło pracę
+    int last_attack; //czy ostatnio wykonano bicie (jeśli tak to gdzie się ono zakończyło)
+    int is_terminated; //flaga informujaca o zakonczeniu gry
+    int dead_threads_count; //są 3 wątki na grę, ile z nich już zakończyło pracę
     //pierwszy kończący zamyka socekty żeby obudzić resztę, ostatni kończący sprząta po grze i zwalnia slot gry
     pthread_mutex_t *mutex; //zamek struktury
     int game_id; //numer indeksu w tablicy games - potrzeby do posprzątania po sobie
@@ -26,18 +26,29 @@ typedef struct //struktura reprezentująca grę
 
 //TODO
 
-char getXCoords(char field) { //wsp. x z numeru pola
+void updateHistory(game *g) { //aktualizuje zajętość pól do heatmapy
+    for (int i = 0; i < 32; i++) {
+        if (g->board[i] == 1 || g->board[i] == 2) {
+            g->board_history_p1[i]++;
+        }
+        if (g->board[i] == 3 || g->board[i] == 4) {
+            g->board_history_p2[i]++;
+        }
+    }
+}
+
+char getXCoords(int field) { //wsp. x z numeru pola
     if ((field / 4) % 2 == 0) {
 	        return (field % 4) * 2 + 1;
 	    }
 	    return (field % 4) * 2;
 }
 
-char getYCoords(char field) { //wsp. y z numeru pola
+char getYCoords(int field) { //wsp. y z numeru pola
     return field/4;
 }
 
-char XYtoFieldNum(char x, char y) { //x, y do numeru pola
+int XYtoFieldNum(int x, int y) { //x, y do numeru pola
     return y * 4 + (x / 2);
 }
 
@@ -50,9 +61,9 @@ void switchPlayers(game *g) {
     g->time_deadline = time(NULL) + ROUND_TIME;
 }
 
-char areEnemies(game *g, char x1, char y1, char x2, char y2) {
-    char state1 = g->board[XYtoFieldNum(x1, y1)];
-    char state2 = g->board[XYtoFieldNum(x2, y2)];
+char areEnemies(game *g, int x1, int y1, int x2, int y2) {
+    int state1 = g->board[XYtoFieldNum(x1, y1)];
+    int state2 = g->board[XYtoFieldNum(x2, y2)];
     if ((state1 == 1 || state2 == 2) 
             && (state2 == 3 || state2 == 4)) {
         return 1;
@@ -64,36 +75,41 @@ char areEnemies(game *g, char x1, char y1, char x2, char y2) {
     return 0;
 }
 
-char canGoDown(game *g, char field) {
-    char state = g->board[field];
+char canGoDown(game *g, int field) {
+    int state = g->board[field];
     if (state == 1 || state == 2 || state == 4)
 		return 1;
 	return 0;
 }
 
-char canGoUp(game *g, char field) {
-    char state = g->board[field];
+char canGoUp(game *g, int field) {
+    int state = g->board[field];
     if (state == 2 || state == 3 || state == 4)
 		return 1;
 	return 0;
 }
 
-char getStateByCoords(game *g, char x, char y) {
+char getStateByCoords(game *g, int x, int y) {
     return g->board[XYtoFieldNum(x, y)];
 }
 
-char isMovePossible(game *g, char x1, char y1, char x2, char y2, char perform) { //czy ruch z (x1, y1) na (x2, y2) jest dozwolony
-    if (x2 < 0 || x2 >= 8 || y2 < 0 || y2 >= 8)
+char isMovePossible(game *g, int x1, int y1, int x2, int y2, int perform) { //czy ruch z (x1, y1) na (x2, y2) jest dozwolony
+    printf("ismovepossible %d %d %d %d \n", x1, y1, x2, y2);
+    if (x2 < 0 || x2 >= 8 || y2 < 0 || y2 >= 8) {
+        printf("poza plansza\n");
         return 0;
-    char fieldNum = XYtoFieldNum(x1, y1);
-    char fieldNum2 = XYtoFieldNum(x2, y2);
-    char pawn = g->board[fieldNum];
+    } 
+    int fieldNum = XYtoFieldNum(x1, y1);
+    int fieldNum2 = XYtoFieldNum(x2, y2);
+    int pawn = g->board[fieldNum];
     if (y1 < y2) {
         if (!canGoDown(g, fieldNum)) {
             return 0;
+            printf("nie moze isc do dolu %d \n", fieldNum);
         }
     } else {
         if (!canGoUp(g, fieldNum)) {
+            printf("nie moze isc do gory %d \n", fieldNum);
             return 0;
         }
     }
@@ -109,7 +125,7 @@ char isMovePossible(game *g, char x1, char y1, char x2, char y2, char perform) {
     if (abs(x1 - x2) == 2 && abs(y1 - y2) == 2) {
         int midx = (x1+x2) / 2;
         int midy = (y1+y2) / 2;
-        char fieldNumMid = XYtoFieldNum(midx, midy);
+        int fieldNumMid = XYtoFieldNum(midx, midy);
         if (getStateByCoords(g, x2, y2) == 0) {
             if (areEnemies(g, x1, y1, midx, midy)) {
                 if (perform) {
@@ -121,15 +137,17 @@ char isMovePossible(game *g, char x1, char y1, char x2, char y2, char perform) {
             }
         }
     }
+
+    printf("end\n");
     
     return 0;
 }
 
-char canMakeAnyMove(game *g, char fieldNum) { //czy pionek może wykonać jakikolwiek ruch
+char canMakeAnyMove(game *g, int fieldNum) { //czy pionek może wykonać jakikolwiek ruch
     if (g->board[fieldNum] == 0) //jeśli puste pole
 		return 0;
-    char x = getXCoords(fieldNum);
-    char y = getYCoords(fieldNum);
+    int x = getXCoords(fieldNum);
+    int y = getYCoords(fieldNum);
 
     if (isMovePossible(g, x, y, x+1, y+1, 0)) {
         return 1;
@@ -159,7 +177,7 @@ char canMakeAnyMove(game *g, char fieldNum) { //czy pionek może wykonać jakiko
     return 0;
 }
 
-char canPlayerMakeAnyMove(game *g, char player) {
+char canPlayerMakeAnyMove(game *g, int player) {
     for(int i = 0; i < 32; i++) {
         if (player == 1) {
             if (g->board[i] == 1 || g->board[i] == 2) {
@@ -178,7 +196,7 @@ char canPlayerMakeAnyMove(game *g, char player) {
     return 0;
 }
 
-char whosePawn(char pawn) {
+int whosePawn(int pawn) {
     if (pawn == 1 || pawn == 2)
         return 1;
     if (pawn == 2 || pawn == 3)
@@ -186,21 +204,21 @@ char whosePawn(char pawn) {
     return 0;
 }
 
-char isMoveAnAttack(char field1, char field2) {
-    char x1 = getXCoords(field1);
-    char x2 = getXCoords(field2);
-    char y1 = getYCoords(field1);
-    char y2 = getYCoords(field2);
+char isMoveAnAttack(int field1, int field2) {
+    int x1 = getXCoords(field1);
+    int x2 = getXCoords(field2);
+    int y1 = getYCoords(field1);
+    int y2 = getYCoords(field2);
     if (abs(x1 - x2) == 2 && abs(y1 - y2) == 2)
         return 1;
     return 0;
 }
 
-char canAttack(game *g, char fieldNum) {
+char canAttack(game *g, int fieldNum) {
     if (g->board[fieldNum] == 0) //jeśli puste pole
 		return 0;
-    char x = getXCoords(fieldNum);
-    char y = getYCoords(fieldNum);
+    int x = getXCoords(fieldNum);
+    int y = getYCoords(fieldNum);
 
     if (isMovePossible(g, x, y, x+2, y+2, 0)) {
         return 1;
@@ -225,24 +243,28 @@ char isTimeUp(game *g) {
     return 0;
 }
 
-char makeMove(game *g, char player, char field1, char field2) { //0 jeśli nie wykonano ruchu, 1 jeśli wykonano
-    char players_pawn = whosePawn(g->board[field1]);
+char makeMove(game *g, int player, int field1, int field2) { //0 jeśli nie wykonano ruchu, 1 jeśli wykonano
+    printf("makemove %d %d %d %d \n", g->game_id, player, field1, field2);
+    int players_pawn = whosePawn(g->board[field1]);
     if (players_pawn != player) {
         return 0; //pionek nie należy do gracza
+        printf("pionek nie należy do gracza \n");
     }
     if (g->last_attack != 60 && field1 != g->last_attack && !isMoveAnAttack(field1, field2)) {
         return 0; //ruch niedozwolony, wymagana kontynuacja bicia
+        printf("ruch niedozwolony, wymagana kontynuacja bicia \n");
     }
-    char x1 = getXCoords(field1);
-    char x2 = getXCoords(field2);
-    char y1 = getYCoords(field1);
-    char y2 = getYCoords(field2);
-    char move_res = isMovePossible(g, x1, x2, y1, y2, 1); //czy można wykonać ruch - jeśli tak, to wykonuje
+    int x1 = getXCoords(field1);
+    int x2 = getXCoords(field2);
+    int y1 = getYCoords(field1);
+    int y2 = getYCoords(field2);
+    int move_res = isMovePossible(g, x1, y1, x2, y2, 1); //czy można wykonać ruch - jeśli tak, to wykonuje
     if (move_res == 1) { //wykonano ruch bez bicia
         switchPlayers(g); //zamiana gracza
         g->last_attack = 60;
         updateHistory(g);
         g->move_count++;
+        return 1;
     } else if (move_res == 2) { //ruch z biciem
         if (canAttack(g, field2)) {
             g->last_attack = field2;
@@ -256,6 +278,7 @@ char makeMove(game *g, char player, char field1, char field2) { //0 jeśli nie w
     } else {
         return 0;
     }
+    return 0;
 }
 /*
 //funkcja wykonująca ruch 0-jeśli nie można wykonać ruchu 1- jeśli wykonano
@@ -370,13 +393,3 @@ int serializeGame(game *g, char *buf) {
     return strlen(buf);
 }
 
-void updateHistory(game *g) { //aktualizuje zajętość pól do heatmapy
-    for (int i = 0; i < 32; i++) {
-        if (g->board[i] == 1 || g->board[i] == 2) {
-            g->board_history_p1[i]++;
-        }
-        if (g->board[i] == 3 || g->board[i] == 4) {
-            g->board_history_p2[i]++;
-        }
-    }
-}

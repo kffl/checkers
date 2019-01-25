@@ -20,6 +20,7 @@ public class ConnectionWriter {
 	}
 	
 	private void send(String msg) {
+		System.out.println("Sending: " + msg);
 		writer.println(msg);
 	}
 }

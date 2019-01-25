@@ -26,7 +26,7 @@ pthread_mutex_t *games_mutex; //zamek dostępu do tablicy rozgrywanych gier
 typedef struct
 {
     game* current_game;
-    char player; //którego gracza nasłuchuje gameManager
+    int player; //którego gracza nasłuchuje gameManager
 } game_manager_data;
 
 void initializeGame(game *new_game, int player1_sd) {
@@ -35,7 +35,6 @@ void initializeGame(game *new_game, int player1_sd) {
     new_game->last_attack = 60;
     new_game->player_move = 0;
     new_game->is_terminated = 0;
-    new_game->time_deadline = time(NULL) + 10;
     new_game->dead_threads_count = 0;
     new_game->mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
     for (int i = 0; i < 32; i++) {
@@ -44,7 +43,7 @@ void initializeGame(game *new_game, int player1_sd) {
             new_game->board_history_p1[i] = 1;
             new_game->board_history_p2[i] = 0;
         } else if (i >= 20) {
-            new_game->board[i] = 2; //gracza 2 w dolnej
+            new_game->board[i] = 3; //gracza 2 w dolnej
             new_game->board_history_p1[i] = 0;
             new_game->board_history_p2[i] = 1;
         } else {
@@ -82,7 +81,7 @@ char sendToClient(int socket, char *buf, int n) { //wysyła do klienta
 }
 
 
-void killGame(game *g, char status) {
+void killGame(game *g, int status) {
     g->player_move = status;
     char buf[1024];
     int i;
@@ -102,12 +101,16 @@ void killGame(game *g, char status) {
 
 void gameManager(void *t_data) {
     int i;
-    pthread_detach(pthread_self());
+    
     game_manager_data *th_data = (game_manager_data*)t_data;
-    game *current_game = (*th_data).current_game;
-    char player = (*th_data).player;
-    char game_id = current_game->game_id;
-    printf("Uruchomiono gameManager gry %d.\n", current_game->game_id);
+    game *current_game = th_data->current_game;
+    //char player = (*th_data).player;
+    int player = th_data->player;
+    //int player_bckp = player;
+    int game_id = current_game->game_id;
+
+    pthread_detach(pthread_self());
+    printf("Uruchomiono gameManager gry %d, gracza %d.\n", current_game->game_id, (*th_data).player);
     int v;
     char buf[1024];
     int player_socket = 0;
@@ -127,6 +130,7 @@ void gameManager(void *t_data) {
 
     while(1) {
         v = recv(player_socket, buf, 1024, 0);
+        //printf("gracz %d odebrał \n", player);
         //printf("Odebrano %d znaków.\n");
         pthread_mutex_lock(current_game->mutex); //mutex gry założony
         //na czas przetwarzania odebranego zapytania
@@ -159,28 +163,29 @@ void gameManager(void *t_data) {
             char cmd;
             cmd = parseCommandName(buf);
             if (cmd == 1) {
-                char pos1, pos2;
+                int pos1, pos2;
                 parseMove(buf, &pos1, &pos2);
-                
-                if (makeMove(current_game, player, pos1, pos2)) { //wykonano ruch
-                    printf("Gra %d: gracz %d wykonał poprawny ruch: %d, %d\n", game_id, player, pos1, pos2);
+
+
+                if (makeMove(current_game, (*th_data).player, pos1, pos2) == 1) { //wykonano ruch
+                    printf("Gra %d : gracz %d wykonał poprawny ruch: %d, %d\n", game_id, (*th_data).player, pos1, pos2);
                     i = serializeGame(current_game, buf);
                     sendToClient(other_player_socket, buf, i);
                     sendToClient(player_socket, buf, i);
                 } else { //nie wykonano ruchu
-                    printf("Gra %d: gracz %d wykonał niepoprawny ruch: %d, %d, ignorujemy\n", game_id, player, pos1, pos2);
+                    printf("Gra %d : gracz %d wykonał niepoprawny ruch: %d, %d, ignorujemy\n", game_id, (*th_data).player, pos1, pos2);
                 }                
             } else if (cmd == 2) {
-                printf("Gra %d: gracz %d opuścił grę\n", game_id, player);
-                killGame(current_game, player+5);   
+                printf("Gra %d : gracz %d opuścił grę\n", game_id, (*th_data).player);
+                killGame(current_game, ((*th_data).player)+5);   
                 current_game->dead_threads_count++;   
                 printf("GameManager gry %d kończy pracę jako pierwszy.\n", current_game->game_id);
                 pthread_mutex_unlock(current_game->mutex);
                 pthread_exit(NULL);
             }
         } else if (v <= 0) { //klient się rozłączył
-            printf("Gra %d: gracz %d - utracono połączenie\n", game_id, player);
-            killGame(current_game, player+5);
+            printf("Gra %d : gracz %d - utracono połączenie\n", game_id, (*th_data).player);
+            killGame(current_game, ( (*th_data).player) + 5);
             current_game->dead_threads_count++;
             printf("GameManager gry %d kończy pracę jako pierwszy.\n", current_game->game_id);
             pthread_mutex_unlock(current_game->mutex);
@@ -196,7 +201,7 @@ void gameTimer(void *t_data) { //wątek, który co 1 sekundę sprawdza czy nie u
     game_manager_data *th_data = (game_manager_data*)t_data;
     game *g = (*th_data).current_game;
     printf("Uruchomiono gameTimer gry %d.\n", g->game_id);
-    char game_end = 0;
+    int game_end = 0;
     while (!game_end) {
         sleep(1);
         pthread_mutex_lock(g->mutex); //modyfikacja danych gry
@@ -214,7 +219,7 @@ void gameTimer(void *t_data) { //wątek, który co 1 sekundę sprawdza czy nie u
                 close(g->player2_socket);   
                 pthread_mutex_unlock(g->mutex);
                 pthread_mutex_lock(games_mutex);
-                char game_id = g->game_id;
+                int game_id = g->game_id;
                 free(g);
                 games[game_id] = NULL;
                 pthread_mutex_unlock(games_mutex);
@@ -225,7 +230,7 @@ void gameTimer(void *t_data) { //wątek, który co 1 sekundę sprawdza czy nie u
         } else { //wpp
             if (isTimeUp(g)) {
                 printf("GameTimer gry %d : czas ruchu gracza %d upłynął.\n", g->game_id, g->player_move);
-                char status = g->player_move + 5;
+                int status = g->player_move + 5;
                 killGame(g, status);
                 g->dead_threads_count++;
                 printf("GameTimer gry %d kończy pracę.\n", g->game_id);
@@ -276,6 +281,7 @@ void connectionListener(int server_socket_descriptor) {
             printf("Poczekalnia pełna, tworzenie gry...\n");
             game *aw_game = games[awaiting_game];
             aw_game -> player2_socket = connection_socket_descriptor;
+            aw_game->time_deadline = time(NULL) + 60;
             awaiting_game = -1;
             //obaj gracze się połączyli, odpalamy gameManager dla każdego z nich
             game_manager_data *data_p1 = malloc(sizeof(game_manager_data));

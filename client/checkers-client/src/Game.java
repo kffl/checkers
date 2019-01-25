@@ -15,7 +15,7 @@ public class Game implements ActionListener {
 	protected boolean gameAlive;
 	private int moveCount;
 	public GameGrid grid;
-	protected byte status;
+	protected byte status = 1;
 	private ConnectionWriter writer;
 	private ConnectionReader reader;
 	private Thread readerThread;
@@ -49,13 +49,13 @@ public class Game implements ActionListener {
 						grid.lock();
 						grid.highlihtPossibleMoves(button);
 						grid.selectedButton = button;
-						System.out.println(button.getFieldNum());
+						//System.out.println(button.getFieldNum());
 						grid.unlock();
-					} else {
-						writer.sendMove(grid.selectedButton.getFieldNum(), button.getFieldNum());		
-						grid.lock();
-						//make move
 					}
+				} else if (button.isHighlighted()) {
+					writer.sendMove(grid.selectedButton.getFieldNum(), button.getFieldNum());		
+					//grid.lock();
+					
 				}
 			}			
 		} else {
@@ -81,10 +81,10 @@ public class Game implements ActionListener {
 			grid.lock();
 			String info = "";
 			System.out.println(status);
-			if (status == 6) {
-					info = "Player 1 left.";
-			} else if (status == 7) {
-					info = "Player 2 left.";
+			if ((status == 6 && player == 1) || (status == 7 && player == 2)) {
+					info = "You were removed from the game.";
+			} else if ((status == 6 && player == 2) || (status == 7 && player == 1)) {
+					info = "Your opponent left the game.";
 			} else if (status == 5) {
 				info = "It's a draw.";
 			} else if ((status == 3 && player == 1) || (status == 4 && player == 2)) {
@@ -128,6 +128,11 @@ public class Game implements ActionListener {
 	public void setPlayer(byte player) {
 		this.player = player;
 	}
+	
+	public void gameStart() {
+		grid.unlock();
+	}
+	
 	
 	public void updateState(String state) {
 		grid.lock();

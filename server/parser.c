@@ -11,7 +11,8 @@ char parseCommandName(char *s) {
     return 0;
 }
 
-void parseMove(char *s, char *pos1, char *pos2) {
+void parseMove(char *s, int *pos1, int *pos2) {
+    //printf("paseMove: %s \n", s);
     int n = strlen(s);
     char buf[20];
     int l = 0;
@@ -25,7 +26,7 @@ void parseMove(char *s, char *pos1, char *pos2) {
     }
     buf[l] = '\0';
     sscanf(buf, "%d", pos1);
-    int j = i;
+    int j = i + 1;
     l = 0;
     for (i = j; i < n; i++) {
         if (s[i] == ';') {
@@ -36,4 +37,5 @@ void parseMove(char *s, char *pos1, char *pos2) {
     }
     buf[l] = '\0';
     sscanf(buf, "%d", pos2);
+    //printf("paseMove: %d %d \n", *pos1, *pos2);
 }
