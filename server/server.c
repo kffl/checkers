@@ -20,15 +20,17 @@
 
 //tablica rozgrywanych gier
 struct game *games[MAX_GAMES];
-pthread_mutex_t *games_mutex; //zamek dostępu do tablicy rozgrywanych gier
+//zamek chroniący dostęp do tablicy rozgrywanych gier
+pthread_mutex_t *games_mutex;
 
-//struktura przekazywana do wątku gameManager
+//struktura przekazywana do wątku gameManager (oraz do gameTimer)
 typedef struct
 {
     game* current_game;
-    int player; //którego gracza nasłuchuje gameManager
+    int player; //którego gracza nasłuchuje gameManager, w przypadku gameTimer - 0
 } game_manager_data;
 
+//inicjalizacja nowej struktury game
 void initializeGame(game *new_game, int player1_sd) {
     new_game->player1_socket = player1_sd;
     new_game->move_count = 0;
@@ -37,7 +39,7 @@ void initializeGame(game *new_game, int player1_sd) {
     new_game->is_terminated = 0;
     new_game->dead_threads_count = 0;
     new_game->mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
-    for (int i = 0; i < 32; i++) {
+    for (int i = 0; i < 32; i++) { //ustawianie pionków
         if (i < 12) {
             new_game->board[i] = 1; //pionki gracza 1 w górnej części
             new_game->board_history_p1[i] = 1;
@@ -54,7 +56,8 @@ void initializeGame(game *new_game, int player1_sd) {
     }    
 }
 
-int findAvailiableGame() { //znajduje wolny slot na grę w tablicy games
+//znajduje wolny slot na grę w tablicy games
+int findAvailiableGame() {
     pthread_mutex_lock(games_mutex);
     for (int i = 0; i < MAX_GAMES; i++) {
         if (games[i] == NULL) {
@@ -66,12 +69,13 @@ int findAvailiableGame() { //znajduje wolny slot na grę w tablicy games
     return -1; //nie znaleziono
 }
 
-char sendToClient(int socket, char *buf, int n) { //wysyła do klienta
+//wysyła komendę do klienta pilnując fragmentacji 1 jeśli ok, 0 jeśli niepowodzenie
+char sendToClient(int socket, char *buf, int n) {
     int i = 0;
     int s;
     while (n > 0) { //zabezpiecza przed pofragmentowaną wysyłką
         s = send(socket, buf+i, n, 0);
-        if (s < 0) {
+        if (s <= 0) {
             return 0;
         }
         i += s;
@@ -80,7 +84,7 @@ char sendToClient(int socket, char *buf, int n) { //wysyła do klienta
     return 1;
 }
 
-
+//kończy grę z powodu = status
 void killGame(game *g, int status) {
     g->player_move = status;
     char buf[1024];
@@ -99,14 +103,12 @@ void killGame(game *g, int status) {
     shutdown(g->player2_socket, SHUT_RD);
 }
 
-void gameManager(void *t_data) {
+//procedura wykonywana przez wątek nasłuchujący komend gracza (2 szt / grę)
+void *gameManager(void *t_data) {
     int i;
-    
     game_manager_data *th_data = (game_manager_data*)t_data;
     game *current_game = th_data->current_game;
-    //char player = (*th_data).player;
     int player = th_data->player;
-    //int player_bckp = player;
     int game_id = current_game->game_id;
 
     pthread_detach(pthread_self());
@@ -125,26 +127,29 @@ void gameManager(void *t_data) {
 
     //na początek wyślij stan gry do swojego klienta
 
+    pthread_mutex_lock(current_game->mutex);
     i = serializeGame(current_game, buf);
     sendToClient(other_player_socket, buf, i);
+    pthread_mutex_unlock(current_game->mutex);
 
     while(1) {
         v = recv(player_socket, buf, 1024, 0);
-        //printf("gracz %d odebrał \n", player);
-        //printf("Odebrano %d znaków.\n");
-        pthread_mutex_lock(current_game->mutex); //mutex gry założony
+        pthread_mutex_lock(current_game->mutex);
+        //mutex gry założony
         //na czas przetwarzania odebranego zapytania
 
 
         //sprawdzamy czy gra się nie skończyła
-        if (current_game->dead_threads_count) { //jeśli jakiś wątek skończył pracę w międzyczasie
+        if (current_game->dead_threads_count) {
+        //jeśli jakiś wątek skończył pracę w międzyczasie
         //oznacza to że sockety już są pozamykane
             if (current_game->dead_threads_count == 1) {
                 current_game->dead_threads_count++;
                 printf("GameManager gry %d kończy pracę.\n", current_game->game_id);
                 pthread_mutex_unlock(current_game->mutex);
                 pthread_exit(NULL);
-            } else if (current_game->dead_threads_count == 2) { //pozostałe 2 wątki już się skończyły, trzeba posprzątać po grze
+            } else if (current_game->dead_threads_count == 2) {
+                //pozostałe 2 wątki już się skończyły, trzeba posprzątać po grze
                 //shutdown był wcześniej, teraz close aby klient się dowiedział
                 close(current_game->player1_socket);
                 close(current_game->player2_socket);                
@@ -159,23 +164,35 @@ void gameManager(void *t_data) {
 
         } 
         
-        if (v>0) { //jeżeli odebrano wiadomość od klienta
+        if (v>0) {
+            //jeżeli odebrano wiadomość od klienta
             char cmd;
             cmd = parseCommandName(buf);
-            if (cmd == 1) {
+            if (cmd == 1) { //komenda move
                 int pos1, pos2;
                 parseMove(buf, &pos1, &pos2);
 
-
-                if (makeMove(current_game, (*th_data).player, pos1, pos2) == 1) { //wykonano ruch
+                if (makeMove(current_game, (*th_data).player, pos1, pos2) > 0) {
+                    //wykonano ruch
                     printf("Gra %d : gracz %d wykonał poprawny ruch: %d, %d\n", game_id, (*th_data).player, pos1, pos2);
+                    if (current_game->player_move > 2) { //jeśli gra się zakończyła
+                        printf("Gra %d : koniec gry \n", game_id);
+                        killGame(current_game, current_game->player_move);   
+                        current_game->dead_threads_count++;   
+                        printf("GameManager gry %d kończy pracę jako pierwszy.\n", current_game->game_id);
+                        pthread_mutex_unlock(current_game->mutex);
+                        pthread_exit(NULL);
+                    }
                     i = serializeGame(current_game, buf);
                     sendToClient(other_player_socket, buf, i);
                     sendToClient(player_socket, buf, i);
-                } else { //nie wykonano ruchu
+                    
+                } else {
+                    //nie wykonano ruchu
                     printf("Gra %d : gracz %d wykonał niepoprawny ruch: %d, %d, ignorujemy\n", game_id, (*th_data).player, pos1, pos2);
                 }                
             } else if (cmd == 2) {
+                //komenda quit
                 printf("Gra %d : gracz %d opuścił grę\n", game_id, (*th_data).player);
                 killGame(current_game, ((*th_data).player)+5);   
                 current_game->dead_threads_count++;   
@@ -183,7 +200,8 @@ void gameManager(void *t_data) {
                 pthread_mutex_unlock(current_game->mutex);
                 pthread_exit(NULL);
             }
-        } else if (v <= 0) { //klient się rozłączył
+        } else {
+            //klient się rozłączył
             printf("Gra %d : gracz %d - utracono połączenie\n", game_id, (*th_data).player);
             killGame(current_game, ( (*th_data).player) + 5);
             current_game->dead_threads_count++;
@@ -196,24 +214,30 @@ void gameManager(void *t_data) {
     pthread_exit(NULL);
 }
 
-void gameTimer(void *t_data) { //wątek, który co 1 sekundę sprawdza czy nie upłynął czas ruchu
+//procedura wykonywana przez wątek timera - co 1s sprawdza czy czas gry nie został przekroczony
+//1 szt. na grę
+void *gameTimer(void *t_data) {
+    
     pthread_detach(pthread_self());
     game_manager_data *th_data = (game_manager_data*)t_data;
     game *g = (*th_data).current_game;
     printf("Uruchomiono gameTimer gry %d.\n", g->game_id);
     int game_end = 0;
+
     while (!game_end) {
         sleep(1);
-        pthread_mutex_lock(g->mutex); //modyfikacja danych gry
+        pthread_mutex_lock(g->mutex);
 
-        if (g->dead_threads_count) { //jeśli jakiś wątek skończył się w międzyczasie
+        if (g->dead_threads_count) {
+        //jeśli jakiś wątek skończył się w międzyczasie
         //oznacza to że sockety już są pozamykane
             if (g->dead_threads_count == 1) {
                 g->dead_threads_count++;
                 printf("GameTimer gry %d kończy pracę.\n", g->game_id);
                 pthread_mutex_unlock(g->mutex);
                 pthread_exit(NULL);
-            } else if (g->dead_threads_count == 2) { //pozostałe 2 wątki już się skończyły, trzeba posprzątać po grze
+            } else if (g->dead_threads_count == 2) {
+                //pozostałe 2 wątki już się skończyły, trzeba posprzątać po grze
                 //shutdown był wcześniej, teraz close aby klient się dowiedział
                 close(g->player1_socket);
                 close(g->player2_socket);   
@@ -227,8 +251,10 @@ void gameTimer(void *t_data) { //wątek, który co 1 sekundę sprawdza czy nie u
                 pthread_exit(NULL);
             }
 
-        } else { //wpp
+        } else {
+            //wpp
             if (isTimeUp(g)) {
+                //jeśli czas na wykonanie ruchu upłynął
                 printf("GameTimer gry %d : czas ruchu gracza %d upłynął.\n", g->game_id, g->player_move);
                 int status = g->player_move + 5;
                 killGame(g, status);
@@ -244,7 +270,9 @@ void gameTimer(void *t_data) { //wątek, który co 1 sekundę sprawdza czy nie u
     pthread_exit(NULL);
 }
 
+//oczekuje na nowe połączenia i przydziela graczy do lobby
 void connectionListener(int server_socket_descriptor) {
+
     int connection_socket_descriptor;
     int awaiting_game = -1; //gra, która czeka na dołączenie graczy
     int awaiting_player_socket_descriptor;
@@ -262,14 +290,18 @@ void connectionListener(int server_socket_descriptor) {
         }
         printf("Połączenie...\n");
 
-        if (awaiting_game == -1) { //żadna gra nie oczekuje, trzeba otworzyć nową
+        if (awaiting_game == -1) {
+            //żadna gra nie oczekuje, trzeba otworzyć nową
             printf("Tworzenie nowej poczekalni...\n");
             awaiting_game = findAvailiableGame();
-            if (awaiting_game == -1) { //wszystkie zajęte
-                close(connection_socket_descriptor); //serwer zapełniony, orzuca połączenie
-            } else { //mamy gracza 1, każemy mu czekać
+            if (awaiting_game == -1) {
+                //wszystkie zajęte
+                //serwer zapełniony, odrzuca połączenie
+                close(connection_socket_descriptor);
+            } else {
+                //mamy gracza 1, każemy mu czekać
                 awaiting_player_socket_descriptor = connection_socket_descriptor;
-                game *new_game = malloc(sizeof(game));
+                game *new_game = (game *) malloc(sizeof(game));
                 new_game->game_id = awaiting_game;
                 initializeGame(new_game, awaiting_player_socket_descriptor);
 
@@ -277,9 +309,10 @@ void connectionListener(int server_socket_descriptor) {
                 char buf[128] = "await;\n";
                 send(awaiting_player_socket_descriptor, buf, strlen(buf), 0);
             }
-        } else { //jakaś gra oczekuje
+        } else {
+            //jakaś gra już oczekuje na gracza
             printf("Poczekalnia pełna, tworzenie gry...\n");
-            game *aw_game = games[awaiting_game];
+            game *aw_game = (game *) games[awaiting_game];
             aw_game -> player2_socket = connection_socket_descriptor;
             aw_game->time_deadline = time(NULL) + 60;
             awaiting_game = -1;
@@ -293,17 +326,19 @@ void connectionListener(int server_socket_descriptor) {
             pthread_t thread1;
             pthread_t thread2;
 
-            //odpalamy gameTimer
+            //odpalamy gameTimer dla gry
             game_manager_data *data_timer = malloc(sizeof(game_manager_data));
             pthread_t thread_timer;
             data_timer -> current_game = aw_game;
             data_timer -> player = 0;
 
+            //wysyłka komendy start
             char buf[128] = "start;\n";
             sendToClient(awaiting_player_socket_descriptor, buf, strlen(buf));
             sendToClient(connection_socket_descriptor, buf, strlen(buf));
             aw_game -> player_move = 1;
 
+            //tworzenie trzech wątków
             create_result1 = pthread_create(&thread1, NULL, gameManager, (void *)data_p1);
             if (create_result1){
                 printf("Błąd przy próbie utworzenia wątku gameManager, kod błędu: %d\n", create_result1);
@@ -324,7 +359,6 @@ void connectionListener(int server_socket_descriptor) {
             }
         }
         
-        //handleConnection(connection_socket_descriptor);
     }
 }
 
@@ -337,7 +371,9 @@ int main(int argc, char *argv[])
     char reuse_addr_val = 1;
     struct sockaddr_in server_address;
     
+    //port serwera z argumentów linii poleń
     if(argc == 2) server_port = strtol(argv[1], NULL, 0);
+
     //inicjalizacja gniazda serwera
 
     memset(&server_address, 0, sizeof(struct sockaddr));
@@ -366,14 +402,16 @@ int main(int argc, char *argv[])
         exit(1);
     }
     
-    printf("Zainicjowano serwer na porcie %d \n", server_port);
+    printf("Zainicjowano serwer na porcie %ld \n", server_port);
     
 
-    for (int i = 0; i < MAX_GAMES; i++) { //zapełnianie tablicy wskaźników na aktywne gry nullami
+    for (int i = 0; i < MAX_GAMES; i++) {
+        //zapełnianie tablicy wskaźników na aktywne gry nullami
         games[i] = NULL;
     }
 
-    games_mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t)); //mutex chroniący tablicę games
+    //mutex chroniący tablicę games
+    games_mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
     
     printf("Odbieranie...\n");
 

@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 
-char parseCommandName(char *s) {
+char parseCommandName(char *s) { //sprawdza która komenda została wysłana przez klienta
     char move[] = "move;";
     char quit[] = "quit;";
     if (strncmp(move, s, strlen(move)) == 0) 
@@ -11,8 +11,7 @@ char parseCommandName(char *s) {
     return 0;
 }
 
-void parseMove(char *s, int *pos1, int *pos2) {
-    //printf("paseMove: %s \n", s);
+void parseMove(char *s, int *pos1, int *pos2) { //parsuje komendę move;
     int n = strlen(s);
     char buf[20];
     int l = 0;
@@ -37,5 +36,4 @@ void parseMove(char *s, int *pos1, int *pos2) {
     }
     buf[l] = '\0';
     sscanf(buf, "%d", pos2);
-    //printf("paseMove: %d %d \n", *pos1, *pos2);
 }

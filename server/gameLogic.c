@@ -6,7 +6,7 @@
 
 #define ROUND_TIME 60 //max długość tury
 
-typedef struct //struktura reprezentująca grę
+typedef struct game //struktura reprezentująca grę
 {
     int player1_socket;
     int player2_socket;
@@ -64,7 +64,7 @@ void switchPlayers(game *g) {
 char areEnemies(game *g, int x1, int y1, int x2, int y2) {
     int state1 = g->board[XYtoFieldNum(x1, y1)];
     int state2 = g->board[XYtoFieldNum(x2, y2)];
-    if ((state1 == 1 || state2 == 2) 
+    if ((state1 == 1 || state1 == 2) 
             && (state2 == 3 || state2 == 4)) {
         return 1;
     }
@@ -94,9 +94,8 @@ char getStateByCoords(game *g, int x, int y) {
 }
 
 char isMovePossible(game *g, int x1, int y1, int x2, int y2, int perform) { //czy ruch z (x1, y1) na (x2, y2) jest dozwolony
-    printf("ismovepossible %d %d %d %d \n", x1, y1, x2, y2);
     if (x2 < 0 || x2 >= 8 || y2 < 0 || y2 >= 8) {
-        printf("poza plansza\n");
+        //printf("poza plansza\n");
         return 0;
     } 
     int fieldNum = XYtoFieldNum(x1, y1);
@@ -105,11 +104,9 @@ char isMovePossible(game *g, int x1, int y1, int x2, int y2, int perform) { //cz
     if (y1 < y2) {
         if (!canGoDown(g, fieldNum)) {
             return 0;
-            printf("nie moze isc do dolu %d \n", fieldNum);
         }
     } else {
         if (!canGoUp(g, fieldNum)) {
-            printf("nie moze isc do gory %d \n", fieldNum);
             return 0;
         }
     }
@@ -137,8 +134,6 @@ char isMovePossible(game *g, int x1, int y1, int x2, int y2, int perform) { //cz
             }
         }
     }
-
-    printf("end\n");
     
     return 0;
 }
@@ -177,7 +172,48 @@ char canMakeAnyMove(game *g, int fieldNum) { //czy pionek może wykonać jakikol
     return 0;
 }
 
-char canPlayerMakeAnyMove(game *g, int player) {
+char canMakeAnyAttack(game *g, int fieldNum) { //czy pionek może wykonać jakiekolwiek bicie
+    if (g->board[fieldNum] == 0) //jeśli puste pole
+		return 0;
+    int x = getXCoords(fieldNum);
+    int y = getYCoords(fieldNum);
+
+    if (isMovePossible(g, x, y, x+2, y+2, 0)) {
+        return 1;
+    }
+    if (isMovePossible(g, x, y, x-2, y+2, 0)) {
+        return 1;
+    }
+    if (isMovePossible(g, x, y, x+2, y-2, 0)) {
+        return 1;
+    }
+    if (isMovePossible(g, x, y, x-2, y-2, 0)) {
+        return 1;
+    }
+
+    return 0;
+}
+
+char canPlayerMakeAnyAttack(game *g, int player) { //czy gracz może wykonać jaiekolwiek bicie
+    for(int i = 0; i < 32; i++) {
+        if (player == 1) {
+            if (g->board[i] == 1 || g->board[i] == 2) {
+                if (canMakeAnyAttack(g, i)) {
+                    return 1;
+                }
+            }
+        } else {
+            if (g->board[i] == 3 || g->board[i] == 4) {
+                if (canMakeAnyAttack(g, i)) {
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+char canPlayerMakeAnyMove(game *g, int player) { //czy gracz może wykonać jakikolwiek ruch
     for(int i = 0; i < 32; i++) {
         if (player == 1) {
             if (g->board[i] == 1 || g->board[i] == 2) {
@@ -196,15 +232,15 @@ char canPlayerMakeAnyMove(game *g, int player) {
     return 0;
 }
 
-int whosePawn(int pawn) {
+int whosePawn(int pawn) { //czyj to pionek? numer gracza
     if (pawn == 1 || pawn == 2)
         return 1;
-    if (pawn == 2 || pawn == 3)
+    if (pawn == 3 || pawn == 4)
         return 2;
     return 0;
 }
 
-char isMoveAnAttack(int field1, int field2) {
+char isMoveAnAttack(int field1, int field2) { //czy ruch jest atakiem
     int x1 = getXCoords(field1);
     int x2 = getXCoords(field2);
     int y1 = getYCoords(field1);
@@ -214,7 +250,7 @@ char isMoveAnAttack(int field1, int field2) {
     return 0;
 }
 
-char canAttack(game *g, int fieldNum) {
+char canAttack(game *g, int fieldNum) { //czy może dokonać ataku z danego pola
     if (g->board[fieldNum] == 0) //jeśli puste pole
 		return 0;
     int x = getXCoords(fieldNum);
@@ -243,16 +279,26 @@ char isTimeUp(game *g) {
     return 0;
 }
 
+char canBecomeKing(game *g, int fieldNum) { //czy pionek może stać się królem
+    if (g->board[fieldNum] == 1 && getYCoords(fieldNum) == 7) {
+        g->board[fieldNum] = 2;
+        return 1;
+    }
+    if (g->board[fieldNum] == 3 && getYCoords(fieldNum) == 0) {
+        g->board[fieldNum] = 4;
+        return 1;
+    }
+    return 0;
+}
+
 char makeMove(game *g, int player, int field1, int field2) { //0 jeśli nie wykonano ruchu, 1 jeśli wykonano
-    printf("makemove %d %d %d %d \n", g->game_id, player, field1, field2);
+    //printf("makemove %d %d %d %d \n", g->game_id, player, field1, field2);
     int players_pawn = whosePawn(g->board[field1]);
     if (players_pawn != player) {
         return 0; //pionek nie należy do gracza
-        printf("pionek nie należy do gracza \n");
     }
     if (g->last_attack != 60 && field1 != g->last_attack && !isMoveAnAttack(field1, field2)) {
         return 0; //ruch niedozwolony, wymagana kontynuacja bicia
-        printf("ruch niedozwolony, wymagana kontynuacja bicia \n");
     }
     int x1 = getXCoords(field1);
     int x2 = getXCoords(field2);
@@ -260,19 +306,39 @@ char makeMove(game *g, int player, int field1, int field2) { //0 jeśli nie wyko
     int y2 = getYCoords(field2);
     int move_res = isMovePossible(g, x1, y1, x2, y2, 1); //czy można wykonać ruch - jeśli tak, to wykonuje
     if (move_res == 1) { //wykonano ruch bez bicia
+            
         switchPlayers(g); //zamiana gracza
-        g->last_attack = 60;
         updateHistory(g);
         g->move_count++;
+
+        canBecomeKing(g, field2); //jeśli może zostać damką, zostaje nią
+
+        if (!canPlayerMakeAnyMove(g, g->player_move)) { //brak możliwości wykonania ruchu
+            if (g->player_move == 1) { //oznacza koniec gry
+                g->player_move = 4;
+            } else if (g->player_move == 2) {
+                g->player_move = 3;
+            }
+        }
+
         return 1;
+
     } else if (move_res == 2) { //ruch z biciem
-        if (canAttack(g, field2)) {
-            g->last_attack = field2;
+        int becameKing = canBecomeKing(g, field2);
+        if (canMakeAnyAttack(g, field2) && !becameKing) { //jeśli może atakować z tego miejsca i nie stał się właśnie damką
+            g->last_attack = field2; //kontunuować bicie
         } else {
             g->last_attack = 60;
             switchPlayers(g);
             updateHistory(g);
             g->move_count++;
+            if (!canPlayerMakeAnyMove(g, g->player_move)) {
+                if (g->player_move == 1) {
+                    g->player_move = 4;
+                } else if (g->player_move == 2) {
+                    g->player_move = 3;
+                }
+            }
         }
         return 1;
     } else {
@@ -280,99 +346,8 @@ char makeMove(game *g, int player, int field1, int field2) { //0 jeśli nie wyko
     }
     return 0;
 }
-/*
-//funkcja wykonująca ruch 0-jeśli nie można wykonać ruchu 1- jeśli wykonano
-char makeMove(game *g, char player, char field1, char field2) {
-    char players_pawn = g->board[field1];
-    if (player != players_pawn && player + 2 != players_pawn) {
-        return 0; //to pole nie należy do gracza
-    }
-    if (g->board[field2] != 0) { //jeśli miejsce docelowe jest zajęte
-        return 0;
-    }
-    if (g->player_move != player) {
-        return 0;
-    }
-    if (g->last_attack != 60) {
-        if (canAttack(g, player, g->last_attack)) { //jeżeli gracz może kontynuować bicie to musi to zrobić
-            if (g->last_attack != field1) {
-                return 0;
-            }
-        }
-    }
 
-    char x1 = getXCoords(field1);
-    char x2 = getXCoords(field2);
-    char y1 = getYCoords(field1);
-    char y2 = getYCoords(field2);
-    char pawn = (g->board[field1] - 1) / 2; //0 jeśli pionek 1 jeśli król
-    char enemy_pawn = 2;
-    char enemy_king = 4;
-    if (player == 2) {
-        enemy_pawn = 1;
-        enemy_king = 3;
-    }
-
-    if (y1 - y2 == -1) { //ruch w dół
-        if (player == 2 && pawn != 1) {
-            return 0;
-        }
-        if (x1 - x2 == 1 || x2 - x1 == 1) {
-            g->board[field1] = 0;
-            g->board[field2] = players_pawn;
-            switchPlayers(g); //zmiana stron
-            return 1;
-        }
-    }     
-    if (y1 - y2 == 1) { //ruch w górę
-        if (player == 1 && pawn != 1) {
-            return 0;
-        }
-        if (x1 - x2 == 1 || x2 - x1 == 1) {
-            g->board[field1] = 0;
-            g->board[field2] = players_pawn;
-            switchPlayers(g); //zmiana stron
-            return 1;
-        }
-    }
-
-    if (y1 - y2 == -2) { //bicie w dół
-        if (player == 2 && pawn != 1) {
-            return 0;
-        }
-        if (x1 - x2 == 2 || x2 - x1 == 2) {
-            char middle_field = XYtoFieldNum(((x1 + x2)/2), (y1 + y2)/2);
-            char middle = g->board[middle_field];
-            if (middle == enemy_king || middle == enemy_pawn) { //wykonujemy bicie - nie zmieniamy stron
-                g->board[field1] = 0;
-                g->board[field2] = players_pawn;
-                g->board[middle_field] = 0;
-                g->last_attack = field2;
-                return 1;
-            }
-        }
-    }     
-    if (y1 - y2 == 2) { //bicie w górę
-        if (player == 1 && pawn != 1) {
-            return 0;
-        }
-        if (x1 - x2 == 2 || x2 - x1 == 2) { 
-            char middle_field = XYtoFieldNum(((x1 + x2)/2), (y1 + y2)/2);
-            char middle = g->board[middle_field];
-            if (middle == enemy_king || middle == enemy_pawn) { //wykonujemy bicie - nie zmieniamy stron
-                g->board[field1] = 0;
-                g->board[field2] = players_pawn;
-                g->board[middle_field] = 0;
-                g->last_attack = field2;
-                return 1;
-            }
-        }
-    }
-    return 0;
-}
-*/
-
-int serializeGame(game *g, char *buf) {
+int serializeGame(game *g, char *buf) { //zwraca długość komendy z opisem stanu gry
     char prefix[] = "state;";
     strcpy (buf, prefix);
     char num[16];
