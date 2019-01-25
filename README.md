@@ -1,25 +1,15 @@
-Sieciowa turowa gra logiczna - warcaby
+## Sieciowa turowa gra logiczna - warcaby
 
-Specyfikacja serwera:
+### Specyfikacja serwera:
 
--umożliwia prowadzenie wielu gier jednocześnie
+- umożliwia prowadzenie wielu gier jednocześnie
 
--weryfikuje poprawność ruchów zgłaszanych przez klientów
+- weryfikuje poprawność ruchów zgłaszanych przez klientów
 
--wykrywa koniec gry
+- wykrywa koniec gry
 
--umożliwia wylistowanie gier, które oczekują na połączenie gracza
+- posiada limit czasu wykonania ruchu
 
-Specyfikacja klienta:
-
--umożliwia połączenie z serwerem o podanych parametrach
-
--umożliwia utworzenie nowej gry o zadanych parametrach lub dołączenie do istniejącej gry (utworzonej przez drugiego gracza)
-
-Dodatkowa funkcjonalność:
-
--limit czasu tury
-
--zliczanie ruchów graczy
+Protokół komunikacyjny znajduje się w pliku [PROTOCOL_SIMPLE.md](PROTOCOL_SIMPLE.md)
 
 Język programowania zastosowany do implementacji klienta: Java (GUI w Swing)

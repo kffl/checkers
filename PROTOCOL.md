@@ -1,3 +1,5 @@
+Porzucony protokół (zbyt złożony)
+
 Komunikacja między klientem a serwerem odbywa się przy użyciu komend tekstowych:
 
 komenda;parametr1;parametr2;[...];parametrN;\n

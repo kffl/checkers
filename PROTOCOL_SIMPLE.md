@@ -34,7 +34,7 @@ Wysyłana przez serwer - informuje o aktualnym stanie gry
 state;status;move_no;pos0;pos1; ... ;pos31;
 ```
 
-- `status`: 1 - ruch gracza 1; 2 - ruch gracza 2; 3 - wygrana gracza 1; 4 - wygrana gracza 2; 5 - wyjście gracza 1; 6 - wyjście gracza 2;
+- `status`: 1 - ruch gracza 1; 2 - ruch gracza 2; 3 - wygrana gracza 1; 4 - wygrana gracza 2; 5- remis; 6 - wyjście gracza 1; 7 - wyjście gracza 2;
 - `move_no`: numer ruchu od początku gry (numerowane od 1)
 - `posn`: pionek znajdujący się na polu o numerze n (numeracja od lewego, górnego rogu); 0 - puste; 1 - pionek gracza 1; 2 - pionek gracza 2; 3 - król gracza 1; 4 - król gracza 2;
 
