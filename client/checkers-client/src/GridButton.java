@@ -84,6 +84,14 @@ public class GridButton extends JButton {
 		return false;
 	}
 	
+	public int whoseMove() {
+		if (state == Pawn1State || state == King1State)
+			return 1;
+		if (state == Pawn2State || state == King2State)
+			return 2;
+		return 0;
+	}
+	
 	public boolean canGoUp() {
 		if (state == King1State || state == Pawn2State || state == King2State)
 			return true;

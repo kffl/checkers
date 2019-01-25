@@ -44,16 +44,18 @@ public class Game implements ActionListener {
 		if (e.getSource() instanceof GridButton) {
 			if (!grid.isLocked()) {
 				GridButton button = (GridButton)e.getSource();
-				if (!button.isHighlighted()) {
-					grid.lock();
-					grid.highlihtPossibleMoves(button);
-					grid.selectedButton = button;
-					System.out.println(button.getFieldNum());
-					grid.unlock();
-				} else {
-					writer.sendMove(grid.selectedButton.getFieldNum(), button.getFieldNum());		
-					grid.lock();
-					//make move
+				if (button.whoseMove() == status) {
+					if (!button.isHighlighted()) {
+						grid.lock();
+						grid.highlihtPossibleMoves(button);
+						grid.selectedButton = button;
+						System.out.println(button.getFieldNum());
+						grid.unlock();
+					} else {
+						writer.sendMove(grid.selectedButton.getFieldNum(), button.getFieldNum());		
+						grid.lock();
+						//make move
+					}
 				}
 			}			
 		} else {
