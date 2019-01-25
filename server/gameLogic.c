@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
+
+#define ROUND_TIME 10 //max długość tury
 
 typedef struct //struktura reprezentująca grę
 {
@@ -14,7 +17,11 @@ typedef struct //struktura reprezentująca grę
     int board_history_p2[32];
     char last_attack; //czy ostatnio wykonano bicie (jeśli tak to gdzie się ono zakończyło)
     char is_terminated; //flaga informujaca o zakonczeniu gry
+    char dead_threads_count; //są 3 wątki na grę, ile z nich już zakończyło pracę
+    //pierwszy kończący zamyka socekty żeby obudzić resztę, ostatni kończący sprząta po grze i zwalnia slot gry
     pthread_mutex_t *mutex; //zamek struktury
+    int game_id; //numer indeksu w tablicy games - potrzeby do posprzątania po sobie
+    int time_deadline; //kiedy kończy się ruch gracza
 } game;
 
 //TODO
@@ -40,6 +47,7 @@ void switchPlayers(game *g) {
     } else if (g->player_move == 2) {
         g->player_move = 1;
     } 
+    g->time_deadline = time(NULL) + ROUND_TIME;
 }
 
 char areEnemies(game *g, char x1, char y1, char x2, char y2) {
@@ -178,31 +186,78 @@ char whosePawn(char pawn) {
     return 0;
 }
 
-char makeMove2(game *g, char player, char field1, char field2) {
+char isMoveAnAttack(char field1, char field2) {
+    char x1 = getXCoords(field1);
+    char x2 = getXCoords(field2);
+    char y1 = getYCoords(field1);
+    char y2 = getYCoords(field2);
+    if (abs(x1 - x2) == 2 && abs(y1 - y2) == 2)
+        return 1;
+    return 0;
+}
+
+char canAttack(game *g, char fieldNum) {
+    if (g->board[fieldNum] == 0) //jeśli puste pole
+		return 0;
+    char x = getXCoords(fieldNum);
+    char y = getYCoords(fieldNum);
+
+    if (isMovePossible(g, x, y, x+2, y+2, 0)) {
+        return 1;
+    }
+    if (isMovePossible(g, x, y, x-2, y+2, 0)) {
+        return 1;
+    }
+    if (isMovePossible(g, x, y, x+2, y-2, 0)) {
+        return 1;
+    }
+    if (isMovePossible(g, x, y, x-2, y-2, 0)) {
+        return 1;
+    }
+
+    return 0;
+}
+
+char isTimeUp(game *g) {
+    if (time(NULL) > g->time_deadline) {
+        return 1;
+    }
+    return 0;
+}
+
+char makeMove(game *g, char player, char field1, char field2) { //0 jeśli nie wykonano ruchu, 1 jeśli wykonano
     char players_pawn = whosePawn(g->board[field1]);
     if (players_pawn != player) {
-        return 0;
+        return 0; //pionek nie należy do gracza
+    }
+    if (g->last_attack != 60 && field1 != g->last_attack && !isMoveAnAttack(field1, field2)) {
+        return 0; //ruch niedozwolony, wymagana kontynuacja bicia
     }
     char x1 = getXCoords(field1);
     char x2 = getXCoords(field2);
     char y1 = getYCoords(field1);
     char y2 = getYCoords(field2);
-    char move_res = isMovePossible(x1, x2, y1, y2, 1);
+    char move_res = isMovePossible(g, x1, x2, y1, y2, 1); //czy można wykonać ruch - jeśli tak, to wykonuje
     if (move_res == 1) { //wykonano ruch bez bicia
         switchPlayers(g); //zamiana gracza
+        g->last_attack = 60;
+        updateHistory(g);
         g->move_count++;
     } else if (move_res == 2) { //ruch z biciem
-        g->last_attack = field2;
-        g->move_count++;
+        if (canAttack(g, field2)) {
+            g->last_attack = field2;
+        } else {
+            g->last_attack = 60;
+            switchPlayers(g);
+            updateHistory(g);
+            g->move_count++;
+        }
+        return 1;
     } else {
-        //niewlasciwy ruch
+        return 0;
     }
 }
-
-char canAttack(game *g, char player, char field) {
-    
-}
-
+/*
 //funkcja wykonująca ruch 0-jeśli nie można wykonać ruchu 1- jeśli wykonano
 char makeMove(game *g, char player, char field1, char field2) {
     char players_pawn = g->board[field1];
@@ -292,10 +347,7 @@ char makeMove(game *g, char player, char field1, char field2) {
     }
     return 0;
 }
-
-void playerQuit(game *g, char player) {
-
-}
+*/
 
 int serializeGame(game *g, char *buf) {
     char prefix[] = "state;";
