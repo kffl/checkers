@@ -6,7 +6,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 
-import java.awt.Color;
 import java.util.ArrayList;
 
 
@@ -27,7 +26,7 @@ public class GameGrid extends JFrame {
 	public GridButton selectedButton = null;
 	public ArrayList<GridButton> highlightedButtons = new ArrayList<GridButton>();
 	
-	
+	//tworzy nową planszę
 	public GameGrid(final Game listener){
 		super("Checkers Game");
 		int n = 8;
@@ -82,6 +81,7 @@ public class GameGrid extends JFrame {
 		add(panel);
 	}
 	
+	//blokuje planszę (przyciski nie reagują)
 	public void lock() {
 		locked = true;
 		for (GridButton btn : highlightedButtons) {
@@ -180,6 +180,7 @@ public class GameGrid extends JFrame {
 		return false;
 	}
 	
+	//podświetla możliwe do wykonania ruchy
 	public void highlihtPossibleMoves(GridButton btn) {
 		int fieldNum = btn.getFieldNum();
 		if (btn.getState() == GridButton.EmptyState)

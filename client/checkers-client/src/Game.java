@@ -62,7 +62,6 @@ public class Game implements ActionListener {
 			if (e.getSource() == grid.quitButton) {
 				this.toDiscard = true;
 				writer.sendQuit();
-				System.out.println("Killing game");
 				killGame();
 			}
 		}
@@ -137,10 +136,8 @@ public class Game implements ActionListener {
 	public void updateState(String state) {
 		grid.lock();
 		state = state.substring(6);
-		System.out.println(state);
 		String[] params = state.split(";");
 		status = Byte.valueOf(params[0]);
-		System.out.println(status);
 		moveCount = Byte.valueOf(params[1]);
 		byte fieldState;
 		for (int i = 2; i < params.length; i++) {

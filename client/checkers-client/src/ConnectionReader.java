@@ -7,7 +7,7 @@ import java.io.InputStreamReader;
 public class ConnectionReader implements Runnable {
 	
 	private Game game;
-	private String lastState = "";
+	private String lastState = ""; //zapis poprzedniego stanu
 	private BufferedReader reader;
 	
 	public ConnectionReader(Game game, InputStream is) {
@@ -36,7 +36,6 @@ public class ConnectionReader implements Runnable {
 					readEnd(msg);
 				}
 			} catch (IOException e) {
-				//System.out.println(e.getMessage());
 				if (game.toDiscard == false) 
 					game.gameErrorEnd();
 				break;
@@ -48,7 +47,7 @@ public class ConnectionReader implements Runnable {
 	}
 	
 	private void readState(String msg) {
-		if (lastState != msg) {
+		if (lastState != msg) { //jeśli nowy stan jest różny od poprzedniego
 			lastState = msg;
 			game.updateState(msg);
 		}
